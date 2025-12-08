@@ -16,7 +16,7 @@ def obtener_datos_stream():
     
     try:
         # Usamos chrome para variar la huella digital
-        response = requests.get(URL_DIRECTO, impersonate='chrome110', timeout=15)
+        response = requests.get(URL_DIRECTO, impersonate='firefox135', timeout=15)
         print(f"Código de respuesta: {response.status_code}")
         
         # 1. Comprobamos si nos han bloqueado o pedido cookies
