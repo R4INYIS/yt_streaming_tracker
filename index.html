@@ -76,6 +76,7 @@
             display: flex;
             gap: 20px;
             margin-bottom: 20px;
+            flex-wrap: wrap; /* Para móviles */
         }
 
         .stat-card {
@@ -83,6 +84,7 @@
             padding: 15px 25px;
             border-radius: 12px;
             flex: 1;
+            min-width: 200px; /* Para móviles */
         }
 
         .stat-label { font-size: 12px; color: #aaa; text-transform: uppercase; margin-bottom: 5px; }
@@ -139,42 +141,34 @@
     <footer>Datos actualizados automáticamente cada 5 minutos.</footer>
 
     <script>
+        let miGraficoChart = null; // Variable global para guardar la instancia del gráfico
+
         async function initDashboard() {
             try {
-                // 1. Cargar CSV (añadimos timestamp para evitar caché)
                 const response = await fetch('tracker_youtube.csv?t=' + Date.now());
                 if (!response.ok) throw new Error("No se pudo cargar el CSV");
                 
                 const text = await response.text();
-                
-                // 2. Parseo inteligente de datos
-                const filas = text.trim().split('\n').slice(1); // Ignorar cabecera
+                const filas = text.trim().split('\n').slice(1);
                 const datosProcesados = [];
                 let maxViewers = 0;
                 let lastViewers = 0;
                 let lastTime = "";
 
                 filas.forEach(fila => {
-                    // Detectar separador (coma o punto y coma)
                     const columnas = fila.split(/[,;]/); 
                     
                     if (columnas.length >= 3) {
                         const fechaStr = columnas[0].trim();
                         const horaStr = columnas[1].trim();
                         let viewersStr = columnas[2].trim();
-
-                        // Limpiar el número de viewers (quitar puntos de miles si existen)
-                        // Ejemplo: "638.000" -> 638000
                         viewersStr = viewersStr.replace(/\./g, '').replace(/,/g, ''); 
                         const viewers = parseInt(viewersStr);
-
-                        // Crear fecha completa para el eje X
-                        // Combina la fecha del CSV y la hora
                         const fechaCompleta = `${fechaStr}T${horaStr}`;
 
                         if (!isNaN(viewers)) {
                             datosProcesados.push({
-                                x: fechaCompleta, // Chart.js prefiere formato ISO
+                                x: fechaCompleta,
                                 y: viewers
                             });
 
@@ -185,41 +179,42 @@
                     }
                 });
 
-                // 3. Actualizar tarjetas de estadísticas
                 document.getElementById('currentViewers').innerText = new Intl.NumberFormat('es-ES').format(lastViewers);
                 document.getElementById('peakViewers').innerText = new Intl.NumberFormat('es-ES').format(maxViewers);
                 document.getElementById('lastUpdate').innerText = lastTime;
 
-                // 4. Dibujar Gráfica con Estilo
                 dibujarGrafica(datosProcesados);
 
             } catch (error) {
                 console.error("Error:", error);
-                document.getElementById('currentViewers').innerText = "Error de datos";
+                document.getElementById('currentViewers').innerText = "Error";
             }
         }
 
         function dibujarGrafica(datos) {
             const ctx = document.getElementById('miGrafica').getContext('2d');
             
-            // Crear gradiente bonito (Rojo YouTube que se desvanece)
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(255, 0, 0, 0.5)');   // Rojo semitransparente arriba
-            gradient.addColorStop(1, 'rgba(255, 0, 0, 0.0)');   // Transparente abajo
+            // --- SOLUCIÓN AL GRÁFICO ROTO ---
+            // Si ya existe un gráfico, lo destruimos antes de crear uno nuevo.
+            if (miGraficoChart) {
+                miGraficoChart.destroy();
+            }
 
-            new Chart(ctx, {
+            // Creamos el nuevo gráfico
+            miGraficoChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     datasets: [{
                         label: 'Espectadores',
                         data: datos,
-                        borderColor: '#ff0000',
-                        backgroundColor: gradient,
+                        borderColor: '#ff0000', // Color de la línea (Rojo)
+                        // CAMBIO: Usamos un color sólido semitransparente en vez de un gradiente
+                        backgroundColor: 'rgba(255, 0, 0, 0.2)', 
                         borderWidth: 2,
-                        pointRadius: 0, // Ocultar puntos para que la línea se vea limpia
-                        pointHoverRadius: 6, // Mostrar punto al pasar el mouse
-                        fill: true,
-                        tension: 0.4 // Curva suave (spline)
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        fill: 'start', // Rellenar desde la línea hasta abajo
+                        tension: 0.4
                     }]
                 },
                 options: {
@@ -230,7 +225,7 @@
                         intersect: false,
                     },
                     plugins: {
-                        legend: { display: false }, // Ocultamos leyenda porque ya está en el título
+                        legend: { display: false },
                         tooltip: {
                             backgroundColor: '#333',
                             titleColor: '#fff',
@@ -246,26 +241,18 @@
                     },
                     scales: {
                         x: {
-                            type: 'time', // IMPORTANTE: Esto arregla los espacios en blanco
+                            type: 'time',
                             time: {
                                 unit: 'minute',
                                 tooltipFormat: 'HH:mm',
-                                displayFormats: {
-                                    minute: 'HH:mm'
-                                }
+                                displayFormats: { minute: 'HH:mm' }
                             },
-                            grid: {
-                                color: '#333333',
-                                borderColor: '#444'
-                            },
-                            ticks: { color: '#888' }
+                            grid: { color: '#333333', borderColor: '#444' },
+                            ticks: { color: '#888', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
                         },
                         y: {
-                            beginAtZero: false, // Para ver mejor las variaciones pequeñas
-                            grid: {
-                                color: '#333333',
-                                borderColor: '#444'
-                            },
+                            beginAtZero: false,
+                            grid: { color: '#333333', borderColor: '#444' },
                             ticks: { color: '#888' }
                         }
                     }
@@ -273,7 +260,10 @@
             });
         }
 
+        // 1. Cargar al inicio
         initDashboard();
+        // 2. Recargar automáticamente cada 5 minutos (300000 ms)
+        setInterval(initDashboard, 300000); 
     </script>
 </body>
 </html>
