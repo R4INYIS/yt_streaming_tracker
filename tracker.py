@@ -53,7 +53,7 @@ def guardar_csv(viewers):
     ahora = datetime.utcnow() + timedelta(hours=1)
     
     fecha = ahora.strftime('%Y-%m-%d')
-    hora = ahora.strftime('%H:%M:%S')
+    hora = ahora.strftime('%H:%M')
     
     archivo_existe = os.path.isfile(NOMBRE_ARCHIVO)
     
