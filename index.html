@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tracker Directo YT</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; }
+        .live-badge { color: red; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>📊 Audiencia en Vivo <span class="live-badge">● LIVE</span></h1>
+        <canvas id="miGrafica"></canvas>
+    </div>
+
+    <script>
+        async function cargarDatos() {
+            // Lee el archivo CSV que genera tu Python
+            const response = await fetch('tracker_youtube.csv?t=' + new Date().getTime()); // El ?t=... evita que el navegador guarde caché vieja
+            const data = await response.text();
+
+            const filas = data.split('\n').slice(1); // Quitamos la cabecera
+            const horas = [];
+            const viewers = [];
+
+            filas.forEach(fila => {
+                const col = fila.split(',');
+                if (col.length >= 3) {
+                    horas.push(col[1]); // Columna Hora
+                    viewers.push(col[2]); // Columna Viewers
+                }
+            });
+
+            dibujarGrafica(horas, viewers);
+        }
+
+        function dibujarGrafica(labels, datos) {
+            const ctx = document.getElementById('miGrafica').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Espectadores Simultáneos',
+                        data: datos,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                }
+            });
+        }
+
+        cargarDatos();
+    </script>
+</body>
+</html>
