@@ -1,4 +1,4 @@
-name: Actualizar Tracker
+name: Actualizar Tracker # Reactivando cron
 
 on:
   schedule:
