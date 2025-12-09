@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 
     <style>
-        /* CONFIGURACIÓN DE COLORES (Modo Claro) */
+        /* CONFIGURACIÓN DE COLORES */
         :root {
             --bg-body: #f0f2f5;
             --bg-card: #ffffff;
@@ -28,6 +28,7 @@
             --border: #e4e6eb;
             --btn-bg: #e4e6eb;
             --btn-active: #1c1e21;
+            --input-bg: #f0f2f5;
         }
 
         body {
@@ -120,11 +121,19 @@
         }
 
         /* Controles de Rango de Tiempo */
+        .controls-wrapper {
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
         .chart-controls {
             display: flex;
+            flex-wrap: wrap;
             justify-content: flex-end;
             gap: 8px;
-            margin-bottom: 10px;
         }
 
         .time-btn {
@@ -139,13 +148,38 @@
             transition: all 0.2s;
         }
 
-        .time-btn:hover {
-            background-color: #d8dadf;
+        .time-btn:hover { background-color: #d8dadf; }
+        .time-btn.active { background-color: var(--btn-active); color: #ffffff; }
+
+        /* Selector de Fechas Personalizado */
+        #customDateSelector {
+            display: none; /* Oculto por defecto */
+            background: #f7f8fa;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
-        .time-btn.active {
-            background-color: var(--btn-active);
-            color: #ffffff;
+        .date-input {
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-main);
+            font-family: inherit;
+        }
+
+        .apply-btn {
+            background-color: var(--text-main);
+            color: #fff;
+            border: none;
+            padding: 7px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
         }
 
         /* Área del Gráfico */
@@ -200,11 +234,26 @@
             </div>
         </div>
 
-        <div class="chart-controls">
-            <button class="time-btn active" onclick="setRange('24h', this)">24 Horas</button>
-            <button class="time-btn" onclick="setRange('7d', this)">1 Semana</button>
-            <button class="time-btn" onclick="setRange('30d', this)">1 Mes</button>
-            <button class="time-btn" onclick="setRange('max', this)">Histórico</button>
+        <div class="controls-wrapper">
+            <div class="chart-controls">
+                <button class="time-btn" onclick="setRange('4h', this)">4h</button>
+                <button class="time-btn" onclick="setRange('12h', this)">12h</button>
+                <button class="time-btn active" onclick="setRange('24h', this)">24h</button>
+                <button class="time-btn" onclick="setRange('7d', this)">7 Días</button>
+                <button class="time-btn" onclick="setRange('30d', this)">1 Mes</button>
+                <button class="time-btn" onclick="setRange('max', this)">Histórico</button>
+                <button class="time-btn" onclick="mostrarPersonalizado(this)">📅 Personalizado</button>
+            </div>
+
+            <div id="customDateSelector">
+                <label style="font-size:12px; font-weight:bold;">Desde:</label>
+                <input type="datetime-local" id="startDate" class="date-input">
+                
+                <label style="font-size:12px; font-weight:bold;">Hasta:</label>
+                <input type="datetime-local" id="endDate" class="date-input">
+                
+                <button class="apply-btn" onclick="aplicarPersonalizado()">Aplicar</button>
+            </div>
         </div>
 
         <div class="chart-area">
@@ -214,11 +263,14 @@
 
     <script>
         let chartInstance = null;
-        let rawDataset = []; // Almacena todos los datos crudos
-        let currentRange = '24h'; // Rango por defecto
+        let rawDataset = [];
+        let currentRange = '24h';
         
-        // Configuración de escalabilidad
-        const MAX_CHART_POINTS = 150; // Cantidad máxima de puntos a dibujar en el gráfico
+        // Variables para rango personalizado
+        let customStartTs = null;
+        let customEndTs = null;
+
+        const MAX_CHART_POINTS = 150; 
 
         function showStatus(msg, isError = false) {
             const el = document.getElementById('statusMessage');
@@ -230,10 +282,8 @@
 
         async function cargarDatos() {
             showStatus("Actualizando datos...");
-            
             try {
                 const response = await fetch('tracker_youtube.csv?v=' + Date.now());
-                
                 if (!response.ok) throw new Error(`Status ${response.status}`);
 
                 const data = await response.text();
@@ -259,7 +309,7 @@
                         if (!isNaN(viewersRaw) && viewersRaw !== "") {
                             const val = parseInt(viewersRaw);
                             const isoDate = `${date}T${time}`;
-                            const timestamp = new Date(isoDate).getTime(); // Usamos timestamp numérico para rapidez
+                            const timestamp = new Date(isoDate).getTime();
                             
                             tempDataset.push({ x: timestamp, y: val });
                             
@@ -275,10 +325,8 @@
                     return;
                 }
 
-                // Guardar datos en variable global
                 rawDataset = tempDataset;
 
-                // Actualizar estadísticas KPI (siempre muestran datos actuales/globales)
                 const formatoNumero = new Intl.NumberFormat('es-ES');
                 document.getElementById('currentVal').innerText = formatoNumero.format(current);
                 document.getElementById('maxVal').innerText = formatoNumero.format(globalMax);
@@ -286,7 +334,6 @@
 
                 document.getElementById('statusMessage').style.display = 'none';
 
-                // Procesar visualización según el filtro seleccionado
                 actualizarGrafico();
 
             } catch (error) {
@@ -295,40 +342,98 @@
             }
         }
 
-        // Función para cambiar el rango de tiempo desde los botones
+        // --- LÓGICA DE BOTONES Y RANGOS ---
+
         function setRange(range, btnElement) {
             currentRange = range;
             
-            // Actualizar clases de botones
+            // UI Botones
             document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
             btnElement.classList.add('active');
+
+            // Ocultar selector personalizado si se elige un rango predefinido
+            document.getElementById('customDateSelector').style.display = 'none';
 
             actualizarGrafico();
         }
 
-        // Lógica principal de filtrado y escalado
+        function mostrarPersonalizado(btnElement) {
+            // UI Botones
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+
+            // Mostrar el selector de fechas
+            const selector = document.getElementById('customDateSelector');
+            selector.style.display = 'flex';
+
+            // Pre-llenar inputs con las últimas 24h si están vacíos
+            if (!document.getElementById('startDate').value) {
+                const now = new Date();
+                const yesterday = new Date(now.getTime() - 24*60*60*1000);
+                
+                // Formato requerido para datetime-local: YYYY-MM-DDTHH:mm
+                const formatInput = (d) => d.toISOString().slice(0, 16);
+                
+                document.getElementById('endDate').value = formatInput(now);
+                document.getElementById('startDate').value = formatInput(yesterday);
+            }
+        }
+
+        function aplicarPersonalizado() {
+            const startVal = document.getElementById('startDate').value;
+            const endVal = document.getElementById('endDate').value;
+
+            if (!startVal || !endVal) {
+                alert("Por favor selecciona ambas fechas.");
+                return;
+            }
+
+            customStartTs = new Date(startVal).getTime();
+            customEndTs = new Date(endVal).getTime();
+
+            if (customStartTs >= customEndTs) {
+                alert("La fecha de inicio debe ser anterior a la fecha de fin.");
+                return;
+            }
+
+            currentRange = 'custom';
+            actualizarGrafico();
+        }
+
+        // --- LÓGICA DE FILTRADO Y GRÁFICO ---
+
         function actualizarGrafico() {
             if (rawDataset.length === 0) return;
 
-            // 1. Filtrar por tiempo (Rango)
-            const now = rawDataset[rawDataset.length - 1].x; // Usamos la última fecha del dataset como "ahora" para consistencia
-            let cutoffTime = 0;
+            const now = rawDataset[rawDataset.length - 1].x; 
+            let datosFiltrados = [];
 
-            if (currentRange === '24h') cutoffTime = now - (24 * 60 * 60 * 1000);
-            else if (currentRange === '7d') cutoffTime = now - (7 * 24 * 60 * 60 * 1000);
-            else if (currentRange === '30d') cutoffTime = now - (30 * 24 * 60 * 60 * 1000);
-            else cutoffTime = 0; // Max
+            if (currentRange === 'custom') {
+                // Filtrado por rango exacto
+                datosFiltrados = rawDataset.filter(d => d.x >= customStartTs && d.x <= customEndTs);
+            } else {
+                // Filtrado relativo (últimas X horas/días)
+                let msToSubtract = 0;
+                
+                if (currentRange === '4h') msToSubtract = 4 * 60 * 60 * 1000;
+                else if (currentRange === '12h') msToSubtract = 12 * 60 * 60 * 1000;
+                else if (currentRange === '24h') msToSubtract = 24 * 60 * 60 * 1000;
+                else if (currentRange === '7d') msToSubtract = 7 * 24 * 60 * 60 * 1000;
+                else if (currentRange === '30d') msToSubtract = 30 * 24 * 60 * 60 * 1000;
+                
+                if (currentRange === 'max') {
+                    datosFiltrados = rawDataset;
+                } else {
+                    const cutoffTime = now - msToSubtract;
+                    datosFiltrados = rawDataset.filter(d => d.x >= cutoffTime);
+                }
+            }
 
-            const datosFiltrados = rawDataset.filter(d => d.x >= cutoffTime);
-
-            // 2. Aplicar Algoritmo de Downsampling (Optimización)
-            // Si hay más puntos que el máximo permitido, agrupamos
+            // Aplicar algoritmo de optimización
             const datosFinales = optimizarDatos(datosFiltrados, MAX_CHART_POINTS);
-
             renderChart(datosFinales);
         }
 
-        // Algoritmo simple de "Binning" (Promedio por ventana de tiempo)
         function optimizarDatos(datos, maxPuntos) {
             if (datos.length <= maxPuntos) return datos;
 
@@ -336,20 +441,12 @@
             const tamañoBloque = Math.ceil(datos.length / maxPuntos);
 
             for (let i = 0; i < datos.length; i += tamañoBloque) {
-                // Tomamos un trozo del array (slice)
                 const bloque = datos.slice(i, i + tamañoBloque);
-                
-                // Calculamos el promedio de Y y el tiempo central de X
                 const sumaY = bloque.reduce((sum, item) => sum + item.y, 0);
                 const avgY = Math.round(sumaY / bloque.length);
-                
-                // Para la X, usamos el tiempo del primer elemento del bloque o el promedio
-                // Usar el tiempo real del último elemento del bloque ayuda a mantener la percepción de "actualidad"
                 const pointX = bloque[bloque.length - 1].x; 
-
                 resultado.push({ x: pointX, y: avgY });
             }
-
             return resultado;
         }
 
@@ -379,11 +476,8 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: { duration: 0 }, // Desactivar animación al redibujar para que sea instantáneo
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    animation: { duration: 0 }, 
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -393,8 +487,8 @@
                                 },
                                 title: function(context) {
                                     const date = new Date(context[0].parsed.x);
-                                    // Formato dinámico según el rango
-                                    if (currentRange === '24h') {
+                                    // Formato dinámico
+                                    if (currentRange === '4h' || currentRange === '12h' || currentRange === '24h') {
                                         return date.toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'});
                                     } else {
                                         return date.toLocaleDateString('es-ES', {day: 'numeric', month: 'short'}) + ' ' + 
@@ -407,9 +501,6 @@
                     scales: {
                         x: {
                             type: 'time',
-                            time: {
-                                tooltipFormat: 'DD T'
-                            },
                             grid: { display: false },
                             ticks: { 
                                 maxRotation: 0, 
@@ -428,9 +519,7 @@
             });
         }
 
-        // Iniciar
         cargarDatos();
-        // Recargar cada 60 segundos
         setInterval(cargarDatos, 60000);
 
     </script>
