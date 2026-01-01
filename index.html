@@ -230,7 +230,7 @@
             </div>
             <div class="stat-item">
                 <div class="stat-label">Último Dato</div>
-                <div class="stat-number" id="lastTime" style="font-size: 24px; margin-top: 6px;">--:-- 30/12/2025</div>
+                <div class="stat-number" style="font-size: 24px; margin-top: 6px;">30/12/2025 - 22:00</div>
             </div>
         </div>
 
@@ -328,9 +328,9 @@
                 rawDataset = tempDataset;
 
                 const formatoNumero = new Intl.NumberFormat('es-ES');
-                document.getElementById('currentVal').innerText = formatoNumero.format(current);
+                // document.getElementById('currentVal').innerText = formatoNumero.format(current);
                 document.getElementById('maxVal').innerText = formatoNumero.format(globalMax);
-                document.getElementById('lastTime').innerText = lastTimeLabel;
+                // document.getElementById('lastTime').innerText = lastTimeLabel;
 
                 document.getElementById('statusMessage').style.display = 'none';
 
