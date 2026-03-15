@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta
 
 # --- CONFIGURACIÓN ---
-URL_DIRECTO = 'https://www.youtube.com/watch?v=7EtlujOpQu0'
+URL_DIRECTO = 'https://www.youtube.com/watch?v=e1bA4n6xXlg'
 NOMBRE_ARCHIVO = 'tracker_youtube.csv'
 
 def obtener_datos():
